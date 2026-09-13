@@ -19,16 +19,29 @@ type pcapCapture struct {
 	done   chan struct{}
 }
 
+// synAckFilter builds a BPF expression matching SYN+ACK segments from the given
+// source port for both address families. The two families need separate
+// branches: combining the bare `tcp` primitive with the `tcp[tcpflags]` index
+// makes libpcap emit an IPv4-only program, silently dropping all IPv6 traffic.
+func synAckFilter(port uint16) string {
+	return fmt.Sprintf(
+		"(ip6 and tcp src port %d and ip6[53] & 0x12 = 0x12) or "+
+			"(ip and tcp src port %d and tcp[tcpflags] & (tcp-syn|tcp-ack) = (tcp-syn|tcp-ack))",
+		port, port,
+	)
+}
+
 func NewCapture(iface string, ports []uint16) (Detector, error) {
-	handle, err := pcap.OpenLive(iface, 68, false, 100*time.Millisecond)
+	// snaplen must cover Ethernet (14) + IPv6 (40) + TCP (20) = 74 bytes, or
+	// IPv6 SYN-ACKs are truncated before the TCP layer decodes.
+	handle, err := pcap.OpenLive(iface, 128, false, 100*time.Millisecond)
 	if err != nil {
 		return nil, fmt.Errorf("pcap open %s: %w (run with sudo)", iface, err)
 	}
 
 	// Only capture SYN-ACK packets (tcp flags SYN+ACK = 0x12).
 	// This drastically reduces pcap load — ignores all data packets.
-	filter := "tcp src port 443 and tcp[tcpflags] & (tcp-syn|tcp-ack) = (tcp-syn|tcp-ack)"
-	if err := handle.SetBPFFilter(filter); err != nil {
+	if err := handle.SetBPFFilter(synAckFilter(443)); err != nil {
 		handle.Close()
 		return nil, fmt.Errorf("set BPF filter: %w", err)
 	}
@@ -96,19 +109,31 @@ func (c *pcapCapture) processPacket(packet gopacket.Packet, cb Callback) {
 		return
 	}
 
-	ipLayer := packet.Layer(layers.LayerTypeIPv4)
-	if ipLayer == nil {
-		return
+	var (
+		srcIP, dstIP net.IP
+		hopLimit     uint8
+	)
+	switch ipLayer := packet.Layer(layers.LayerTypeIPv4).(type) {
+	case *layers.IPv4:
+		srcIP, dstIP = ipLayer.DstIP.To4(), ipLayer.SrcIP.To4()
+		hopLimit = ipLayer.TTL
+	default:
+		ip6Layer, ok := packet.Layer(layers.LayerTypeIPv6).(*layers.IPv6)
+		if !ok {
+			return
+		}
+		srcIP, dstIP = ip6Layer.DstIP.To16(), ip6Layer.SrcIP.To16()
+		hopLimit = ip6Layer.HopLimit
 	}
-	ip := ipLayer.(*layers.IPv4)
 
 	evt := ConnectionEvent{
-		SrcIP:   append(net.IP{}, ip.DstIP.To4()...), // our IP
-		DstIP:   append(net.IP{}, ip.SrcIP.To4()...), // server IP
-		SrcPort: uint16(tcp.DstPort),                 // our port
-		DstPort: uint16(tcp.SrcPort),                 // server port (443)
-		Seq:     tcp.Ack,                             // our snd_nxt
-		Ack:     tcp.Seq + 1,                         // our rcv_nxt
+		SrcIP:    append(net.IP{}, srcIP...), // our IP
+		DstIP:    append(net.IP{}, dstIP...), // server IP
+		SrcPort:  uint16(tcp.DstPort),        // our port
+		DstPort:  uint16(tcp.SrcPort),        // server port (443)
+		Seq:      tcp.Ack,                    // our snd_nxt
+		Ack:      tcp.Seq + 1,                // our rcv_nxt
+		HopLimit: hopLimit,
 	}
 
 	cb(evt)

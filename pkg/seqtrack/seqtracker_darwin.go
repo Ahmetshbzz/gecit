@@ -55,15 +55,16 @@ func SetSeqTracker(st *SeqTracker) {
 }
 
 // GetSeqAck returns the real TCP seq/ack for a connection by waiting for
-// pcap to capture the SYN-ACK.
-func GetSeqAck(conn net.Conn) (seq, ack uint32) {
+// pcap to capture the SYN-ACK, together with the SYN-ACK's observed hop limit
+// (zero when unavailable).
+func GetSeqAck(conn net.Conn) (seq, ack uint32, hopLimit uint8) {
 	if globalSeqTracker == nil {
-		return 1, 1
+		return 1, 1, 0
 	}
 
 	tcpConn, ok := conn.(*net.TCPConn)
 	if !ok {
-		return 1, 1
+		return 1, 1, 0
 	}
 
 	localPort := uint16(tcpConn.LocalAddr().(*net.TCPAddr).Port)
@@ -73,8 +74,8 @@ func GetSeqAck(conn net.Conn) (seq, ack uint32) {
 	evt := globalSeqTracker.WaitForSeqAck(localPort, 500*time.Millisecond)
 	if evt == nil {
 		logrus.WithField("port", localPort).Warn("seq/ack fallback to placeholder — fake may be rejected by DPI")
-		return 1, 1
+		return 1, 1, 0
 	}
 
-	return evt.Seq, evt.Ack
+	return evt.Seq, evt.Ack, evt.HopLimit
 }

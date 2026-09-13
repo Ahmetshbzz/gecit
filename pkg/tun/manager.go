@@ -9,8 +9,8 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/boratanrikulu/gecit/pkg/seqtrack"
 	"github.com/boratanrikulu/gecit/pkg/rawsock"
+	"github.com/boratanrikulu/gecit/pkg/seqtrack"
 	"github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing/common/control"
 	singlog "github.com/sagernet/sing/common/logger"
@@ -61,7 +61,14 @@ func NewManager(cfg Config, logger *logrus.Logger) *Manager {
 func (m *Manager) Start(ctx context.Context) error {
 	m.ctx, m.cancel = context.WithCancel(ctx)
 
-	rs, err := rawsock.New()
+	if m.cfg.Interface == "" {
+		m.cfg.Interface = detectPhysicalInterface()
+	}
+	if m.cfg.Interface == "" {
+		return fmt.Errorf("no physical interface found")
+	}
+
+	rs, err := rawsock.New(m.cfg.Interface)
 	if err != nil {
 		return fmt.Errorf("raw socket: %w", err)
 	}
@@ -212,18 +219,28 @@ func (m *Manager) initNetworking() error {
 
 func (m *Manager) tunOptions() tun.Options {
 	return tun.Options{
-		Name:             "utun85",
-		Inet4Address:     []netip.Prefix{netip.MustParsePrefix("10.0.85.1/30")},
+		Name:         "utun85",
+		Inet4Address: []netip.Prefix{netip.MustParsePrefix("10.0.85.1/30")},
+		Inet6Address: []netip.Prefix{netip.MustParsePrefix("fdfe:dcba:9876::1/126")},
+		// Only global unicast is routed into the TUN. AutoRoute's darwin IPv6
+		// ranges cover fe80::/10 and ff00::/8 as well, which would break NDP and
+		// multicast on the physical interface.
+		Inet6RouteAddress: []netip.Prefix{netip.MustParsePrefix("2000::/3")},
+		Inet6RouteExcludeAddress: []netip.Prefix{
+			netip.MustParsePrefix("fe80::/10"),
+			netip.MustParsePrefix("ff00::/8"),
+		},
 		MTU:              tunMTU,
 		AutoRoute:        true,
 		InterfaceMonitor: m.ifaceMonitor,
 		InterfaceFinder:  m.ifaceFinder,
-		DNSServers: []netip.Addr{netip.MustParseAddr("127.0.0.1")},
+		DNSServers:       []netip.Addr{netip.MustParseAddr("127.0.0.1")},
 	}
 }
 
 func detectPhysicalInterface() string {
 	ifaces, _ := net.Interfaces()
+	fallback := ""
 	for _, iface := range ifaces {
 		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
 			continue
@@ -248,8 +265,15 @@ func detectPhysicalInterface() string {
 			if ipv4 := ipNet.IP.To4(); ipv4 != nil && !ipv4.IsLoopback() && !ipv4.Equal(net.IPv4(10, 0, 85, 1)) {
 				return name
 			}
+			// No IPv4 anywhere: fall back to a global IPv6 address so the
+			// engine still starts on an IPv6-only network.
+			if fallback == "" && ipNet.IP.To4() == nil {
+				ip6 := ipNet.IP.To16()
+				if ip6 != nil && !ip6.IsLoopback() && !ip6.IsLinkLocalUnicast() {
+					fallback = name
+				}
+			}
 		}
 	}
-	return ""
+	return fallback
 }
-

@@ -204,3 +204,117 @@ func TestBuildPacket_DifferentTTL(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildPacket_IPv6Header(t *testing.T) {
+	conn := ConnInfo{
+		SrcIP:   net.ParseIP("2a00:1d35:e2f6:b300:98:275:e642:d37e"),
+		DstIP:   net.ParseIP("2600:9000:2921:c00:11:b398:a580:93a1"),
+		SrcPort: 51234,
+		DstPort: 443,
+		Seq:     1000,
+		Ack:     2000,
+	}
+	payload := []byte("hello")
+
+	pkt := BuildPacket(conn, payload, 8)
+
+	if len(pkt) != 40+20+len(payload) {
+		t.Fatalf("packet length: got %d, want %d", len(pkt), 40+20+len(payload))
+	}
+	if pkt[0] != 0x60 {
+		t.Fatalf("IP version: got 0x%02x, want 0x60", pkt[0])
+	}
+	if got := binary.BigEndian.Uint16(pkt[4:6]); got != uint16(20+len(payload)) {
+		t.Fatalf("payload length: got %d, want %d", got, 20+len(payload))
+	}
+	if pkt[6] != 6 {
+		t.Fatalf("next header: got %d, want 6 (TCP)", pkt[6])
+	}
+	if pkt[7] != 8 {
+		t.Fatalf("hop limit: got %d, want 8", pkt[7])
+	}
+	if got := net.IP(pkt[8:24]); !got.Equal(conn.SrcIP) {
+		t.Fatalf("src IP: got %v, want %v", got, conn.SrcIP)
+	}
+	if got := net.IP(pkt[24:40]); !got.Equal(conn.DstIP) {
+		t.Fatalf("dst IP: got %v, want %v", got, conn.DstIP)
+	}
+}
+
+func TestBuildPacket_IPv6TCPChecksum(t *testing.T) {
+	conn := ConnInfo{
+		SrcIP:   net.ParseIP("2a00:1d35:e2f6:b300:98:275:e642:d37e"),
+		DstIP:   net.ParseIP("2600:9000:2921:c00:11:b398:a580:93a1"),
+		SrcPort: 51234,
+		DstPort: 443,
+		Seq:     1000,
+		Ack:     2000,
+	}
+	payload := []byte("test")
+
+	pkt := BuildPacket(conn, payload, 8)
+	segment := pkt[40:]
+
+	// IPv6 pseudo-header: src(16) + dst(16) + upper-layer length(4) + zero(3) + next header(1)
+	pseudo := make([]byte, 0, 40+len(segment))
+	pseudo = append(pseudo, conn.SrcIP.To16()...)
+	pseudo = append(pseudo, conn.DstIP.To16()...)
+	lenBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(lenBuf, uint32(len(segment)))
+	pseudo = append(pseudo, lenBuf...)
+	pseudo = append(pseudo, 0, 0, 0, 6)
+	pseudo = append(pseudo, segment...)
+
+	if cs := Checksum(pseudo); cs != 0 {
+		t.Fatalf("TCP checksum verification failed: got 0x%04x, want 0x0000", cs)
+	}
+}
+
+func TestBuildPacket_IPv6DifferentHopLimit(t *testing.T) {
+	conn := ConnInfo{
+		SrcIP:   net.ParseIP("2a00:1d35:e2f6:b300:98:275:e642:d37e"),
+		DstIP:   net.ParseIP("2600:9000:2921:c00:11:b398:a580:93a1"),
+		SrcPort: 5000,
+		DstPort: 443,
+	}
+
+	for _, ttl := range []int{1, 8, 64, 255} {
+		pkt := BuildPacket(conn, []byte("x"), ttl)
+		if pkt[7] != byte(ttl) {
+			t.Errorf("hop limit %d: got %d", ttl, pkt[7])
+		}
+	}
+}
+
+func TestBuildEthernetFrame_IPv6(t *testing.T) {
+	srcMAC, _ := net.ParseMAC("26:f8:df:a9:b3:21")
+	dstMAC, _ := net.ParseMAC("4c:2e:fe:36:2c:e7")
+	conn := ConnInfo{
+		SrcIP:   net.ParseIP("2a00:1d35:e2f6:b300:98:275:e642:d37e"),
+		DstIP:   net.ParseIP("2600:9000:2921:c00:11:b398:a580:93a1"),
+		SrcPort: 51234,
+		DstPort: 443,
+	}
+	ipPacket := BuildPacket(conn, nil, 8)
+
+	frame := BuildEthernetFrame(srcMAC, dstMAC, ipPacket)
+
+	if len(frame) != 14+len(ipPacket) {
+		t.Fatalf("frame length: got %d, want %d", len(frame), 14+len(ipPacket))
+	}
+	if got := net.HardwareAddr(frame[0:6]); got.String() != dstMAC.String() {
+		t.Fatalf("dst MAC: got %v, want %v", got, dstMAC)
+	}
+	if got := net.HardwareAddr(frame[6:12]); got.String() != srcMAC.String() {
+		t.Fatalf("src MAC: got %v, want %v", got, srcMAC)
+	}
+	if got := binary.BigEndian.Uint16(frame[12:14]); got != 0x86dd {
+		t.Fatalf("ethertype: got 0x%04x, want 0x86dd", got)
+	}
+	if frame[14] != 0x60 {
+		t.Fatalf("inner IP version: got 0x%02x, want 0x60", frame[14])
+	}
+	if frame[14+7] != 8 {
+		t.Fatalf("hop limit: got %d, want 8", frame[14+7])
+	}
+}

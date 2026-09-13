@@ -13,6 +13,6 @@ func NewSeqTracker(_ string, _ []uint16) (*SeqTracker, error) {
 
 func SetSeqTracker(_ *SeqTracker) {}
 
-func GetSeqAck(_ net.Conn) (seq, ack uint32) { return 1, 1 }
+func GetSeqAck(_ net.Conn) (seq, ack uint32, hopLimit uint8) { return 1, 1, 0 }
 
 func (st *SeqTracker) Stop() {}

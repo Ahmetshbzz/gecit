@@ -18,7 +18,7 @@ type pcapRawSocket struct {
 	dstMAC net.HardwareAddr
 }
 
-func New() (RawSocket, error) {
+func New(_ string) (RawSocket, error) {
 	iface, err := defaultInterface()
 	if err != nil {
 		return nil, fmt.Errorf("detect interface: %w", err)
