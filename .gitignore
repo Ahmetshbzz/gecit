@@ -14,3 +14,5 @@ apps/macos/build/
 .claude-xcodebuild.log
 *.xcuserstate
 xcuserdata/
+.build-release/
+apps/macos/.build-release/

@@ -6,34 +6,11 @@ struct MainPageView: View {
     let theme: AppTheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Spacer()
-                headerActions
-            }
+        VStack(spacing: 0) {
+            topBar
 
-            primaryActionSection
+            Spacer(minLength: 0)
 
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Durum")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(theme.textPrimary)
-                infoRow("Servis", model.helperInstalled ? "Hazır" : "Yeniden kurulum gerekli")
-                runtimeBadgeRow
-                infoRow("PID", model.status.pid.map(String.init) ?? "—")
-                infoRow("Mesaj", model.status.message)
-                infoRow("Ayarlar", model.currentSettingsSummary)
-            }
-            .padding(16)
-            .background(theme.card, in: RoundedRectangle(cornerRadius: 18))
-
-            Spacer()
-        }
-    }
-
-    private var primaryActionSection: some View {
-        HStack {
-            Spacer()
             PrimaryActionButton(
                 title: model.primaryActionTitle,
                 symbol: model.primaryActionSymbol,
@@ -44,13 +21,24 @@ struct MainPageView: View {
             ) {
                 model.performPrimaryAction()
             }
-            Spacer()
+
+            StatusBadge(title: model.statusTitle, state: model.status.state, theme: theme)
+                .padding(.top, 16)
+
+            Spacer(minLength: 0)
+
+            statusDetails
         }
-        .frame(maxWidth: .infinity)
     }
 
-    private var headerActions: some View {
+    private var topBar: some View {
         HStack(spacing: 10) {
+            Text("geçit")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(theme.textPrimary)
+
+            Spacer()
+
             Button {
                 model.currentPage = .logs
             } label: {
@@ -75,59 +63,52 @@ struct MainPageView: View {
         }
     }
 
-    private var runtimeBadgeRow: some View {
-        HStack(alignment: .center, spacing: 0) {
-            Text("Runtime")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(theme.textMuted)
-                .frame(width: 72, alignment: .leading)
-
-            HStack {
-                Text(model.statusTitle)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(badgeForeground)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(badgeBackground, in: Capsule())
-                    .animation(.easeInOut(duration: 0.22), value: model.status.state)
-                Spacer(minLength: 0)
+    private var statusDetails: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            detailRow("Servis", model.helperInstalled ? "Hazır" : "Yeniden kurulum gerekli")
+            divider
+            detailRow("PID", model.status.pid.map(String.init) ?? "—")
+            divider
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Mesaj")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(theme.textMuted)
+                Text(model.status.message)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(theme.textPrimary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            divider
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Ayarlar")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(theme.textMuted)
+                Text(model.currentSettingsSummary)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(theme.textPrimary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
+        .padding(.top, 16)
+        .animation(.easeInOut(duration: 0.2), value: model.status.state)
     }
 
-    private var badgeForeground: Color {
-        switch model.status.state {
-        case .running:
-            return Color.green
-        case .starting, .stopping:
-            return Color.orange
-        default:
-            return theme.textPrimary
-        }
+    private var divider: some View {
+        Divider().overlay(theme.divider)
     }
 
-    private var badgeBackground: Color {
-        switch model.status.state {
-        case .running:
-            return Color.green.opacity(colorScheme == .dark ? 0.16 : 0.14)
-        case .starting, .stopping:
-            return Color.orange.opacity(colorScheme == .dark ? 0.18 : 0.14)
-        default:
-            return theme.badgeBackground
-        }
-    }
-
-    private func infoRow(_ key: String, _ value: String) -> some View {
-        HStack(alignment: .top) {
+    private func detailRow(_ key: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
             Text(key)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(theme.textMuted)
-                .frame(width: 72, alignment: .leading)
+            Spacer(minLength: 12)
             Text(value)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(theme.textPrimary)
-            Spacer()
+                .textSelection(.enabled)
         }
     }
 }

@@ -7,21 +7,22 @@ struct PageHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
+            HStack(spacing: 10) {
                 Button(action: onBack) {
-                    Label("Geri", systemImage: "chevron.left")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(theme.textPrimary)
+                    HoverCapsuleContent(helpText: "Geri") {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(ScaleButtonStyle())
                 .focusEffectDisabled()
 
                 Spacer()
-            }
 
-            Text(title)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(theme.textPrimary)
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(theme.textPrimary)
+            }
         }
     }
 }

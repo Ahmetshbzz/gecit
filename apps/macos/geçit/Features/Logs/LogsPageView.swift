@@ -16,6 +16,7 @@ struct LogsPageView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         Text(attributedLogs)
                             .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .lineSpacing(3)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         Color.clear
@@ -24,9 +25,6 @@ struct LogsPageView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(14)
-                .background(theme.logBackground, in: RoundedRectangle(cornerRadius: 16))
-                .overlay(RoundedRectangle(cornerRadius: 16).stroke(theme.textPrimary.opacity(colorScheme == .dark ? 0.08 : 0.06), lineWidth: 1))
                 .onAppear {
                     scrollToBottom(proxy)
                 }

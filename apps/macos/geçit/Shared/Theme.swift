@@ -10,6 +10,7 @@ struct AppTheme {
     let textMuted: Color
     let logBackground: Color
     let badgeBackground: Color
+    let divider: Color
     let primaryButtonStart: Color
     let primaryButtonStop: Color
     let primaryButtonText: Color
@@ -28,6 +29,7 @@ struct AppTheme {
                 textMuted: Color.black.opacity(0.5),
                 logBackground: Color.black.opacity(0.06),
                 badgeBackground: Color.black.opacity(0.06),
+                divider: Color.black.opacity(0.08),
                 primaryButtonStart: Color(red: 0.10, green: 0.58, blue: 0.32),
                 primaryButtonStop: Color(red: 0.82, green: 0.22, blue: 0.18),
                 primaryButtonText: .white,
@@ -46,6 +48,7 @@ struct AppTheme {
             textMuted: Color.white.opacity(0.58),
             logBackground: Color.white.opacity(0.06),
             badgeBackground: Color.white.opacity(0.08),
+            divider: Color.white.opacity(0.10),
             primaryButtonStart: Color(red: 0.20, green: 0.78, blue: 0.42),
             primaryButtonStop: Color(red: 0.95, green: 0.32, blue: 0.28),
             primaryButtonText: .white,
