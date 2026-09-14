@@ -30,6 +30,14 @@ struct GecitHelperInstaller {
     }
 
     func install() throws {
+        guard let bundledBinaryPath = AppPaths.bundledBinaryPath else {
+            throw NSError(
+                domain: "GecitHelperInstaller",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Uygulama paketinde gecit-darwin-arm64 bulunamadı."]
+            )
+        }
+
         let tempDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
 
@@ -40,7 +48,7 @@ struct GecitHelperInstaller {
 
         try daemonScriptBuilder.render().write(to: daemonURL, atomically: true, encoding: .utf8)
         try plistBuilder.render().write(to: plistURL, atomically: true, encoding: .utf8)
-        try FileManager.default.copyItem(at: URL(fileURLWithPath: AppPaths.bundledBinaryPath), to: binaryURL)
+        try FileManager.default.copyItem(at: URL(fileURLWithPath: bundledBinaryPath), to: binaryURL)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: binaryURL.path)
         try installScriptBuilder.render(daemonURL: daemonURL.path, plistURL: plistURL.path, binaryURL: binaryURL.path).write(to: installURL, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: installURL.path)

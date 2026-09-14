@@ -22,9 +22,20 @@ The app uses a split model:
 
 Control and state move through shared files:
 
-- command file: `/Users/Shared/GecitHelper/command`
-- status file: `/Users/Shared/GecitHelper/status.json`
-- log file: `/Users/Shared/GecitHelper/gecit.log`
+- directory: `/Users/Shared/GecitHelper` (mode `700`, owned by the console user)
+- command file: `/Users/Shared/GecitHelper/command` (mode `600`)
+- status file: `/Users/Shared/GecitHelper/status.json` (mode `600`)
+- log file: `/Users/Shared/GecitHelper/gecit.log` (mode `600`, capped at 5 MiB: rotated to `gecit.log.1` on start, truncated in place while running)
+- pid file: `/Users/Shared/GecitHelper/gecit.pid` (mode `600`)
+
+The helper runs as root and re-applies owner and mode on every loop, so files it
+recreates never stay readable or writable by other accounts. The log records every
+visited host name, so it must not be world readable.
+
+Only the `start` arguments the app itself emits are forwarded to the runtime binary:
+`--fake-ttl` (1-255), `--doh` (`true`/`false`), `--doh-upstream` (preset name only),
+`--interface` (interface name characters only) and `--ports` (comma separated, 1-65535).
+Anything else is rejected without spawning the runtime.
 
 ## Main components
 
@@ -53,11 +64,13 @@ After installation, the app can start and stop the runtime from the menu bar.
 
 - fake TTL
 - DoH enabled/disabled
-- DoH upstream preset or custom value
+- DoH upstream preset
 - network interface override
 - destination ports
 
-These settings are converted into CLI arguments before the runtime starts.
+These settings are converted into CLI arguments before the runtime starts. The helper
+accepts only the presets listed in `SettingsStore.dohPresets`; custom upstream URLs can
+be passed to the binary directly from the terminal, but never through the command file.
 
 ## Build
 
